@@ -36,6 +36,39 @@ interface RoomData {
 const rooms = new Map<string | "publicId", RoomData>();  // Map<roomId , roomData>
 const users = new Map<WebSocket , string>();           // Map <curr_websocket_of_user && , username>
 
+const CLEANUP_INTERVAL = 10 * 60 * 1000; // 10m
+const ROOM_INACTIVE_TIMEOUT = 30 * 60 * 1000; // 30m
+
+function cleanupRooms() {
+    const now = Date.now();
+    
+    rooms.forEach((room, roomId) => {
+
+            const isInactive = (now - room.lastActive) > ROOM_INACTIVE_TIMEOUT;
+            const isEmpty = room.users.size === 0;
+            
+            if (isInactive || isEmpty) {
+                console.log(`Cleaning up inactive room: ${roomId}`);
+                rooms.delete(roomId);
+            } 
+    });
+    
+    console.log(`Cleanup completed. Active rooms: ${rooms.size}, Active users: ${users.size}`);
+}
+
+// Start cleanup interval
+const cleanupInterval = setInterval(cleanupRooms, CLEANUP_INTERVAL);
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+    console.log('Shutting down server...');
+    clearInterval(cleanupInterval);
+    wss.close(() => {
+        console.log('WebSocket server closed');
+        process.exit(0);
+    });
+});
+
 
 wss.on("connection", (socket) => {
     
@@ -84,7 +117,7 @@ wss.on("connection", (socket) => {
 
                 if(!username){
                     socket.send(JSON.stringify({
-                        type : "err",
+                        type : "error",
                         message : "User not found"
                     }));
                     return;
@@ -99,6 +132,7 @@ wss.on("connection", (socket) => {
                 
                 if(publicRoom){
                     publicRoom.messages.push(message);
+                    publicRoom.lastActive = Date.now(); 
 
                     publicRoom.users.forEach((_,userSocket) => {
                         if(userSocket !== socket){
@@ -192,6 +226,7 @@ wss.on("connection", (socket) => {
                 const privateRoom = rooms.get(roomId);
                 if(privateRoom){
                     privateRoom.messages.push(message);
+                    privateRoom.lastActive = Date.now(); // Update activity timestamp
 
                     privateRoom.users.forEach((_ , userSocket) => {
                         if(userSocket !== socket){
@@ -199,6 +234,7 @@ wss.on("connection", (socket) => {
                                 type : "chat",
                                 roomType : "private",
                                 payload : {
+                                    roomId : roomId,
                                     message : message.content,
                                     sender : message.sender,
                                     timestamp : Date.now()
@@ -207,12 +243,11 @@ wss.on("connection", (socket) => {
                         }
                     })
                 }
-            
             }
         }
 
-    }catch(err){
-        console.log("JSON parse Error : ",err);
+    }catch(error){
+        console.log("JSON parse Error : ",error);
         socket.send(JSON.stringify({
             type : "error",
             message : "Invalid message format"
