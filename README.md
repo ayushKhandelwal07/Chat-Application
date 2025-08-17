@@ -162,7 +162,3 @@ chat-app/
 <img width="1920" height="1034" alt="image" src="https://github.com/user-attachments/assets/7f7a6d03-f122-4f5e-84a0-dc79f9bc5162" />
 <img width="1920" height="1033" alt="image" src="https://github.com/user-attachments/assets/e972a51e-0a2e-4122-8bdb-e3a769d7c3cf" />
 
-
-![alt text](image-1.png)
-
-![alt text](image-2.png)
